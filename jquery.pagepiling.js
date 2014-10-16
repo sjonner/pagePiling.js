@@ -10,6 +10,8 @@
 
 (function ($) {
     $.fn.pagepiling = function (options) {
+        var $doc = $(document);
+        var $pages;
         var container = $(this);
         var lastScrolledDestiny;
         var lastAnimation = 0;
@@ -41,7 +43,8 @@
             normalScrollElementTouchThreshold: 5,
             touchSensitivity: 5,
             keyboardScrolling: true,
-            sectionSelector: '.section',
+            sectionSelector: '.pile-page',
+            activeClass: 'is-active',
             animateAnchor: false,
 
             //events
@@ -93,11 +96,11 @@
         * Moves sectio up
         */
         $.fn.pagepiling.moveSectionUp = function () {
-            var prev = $('.pp-section.active').prev('.pp-section');
+            var prev = $pages.filter('.' + options.activeClass).prev('.pp-section');
 
             //looping to the bottom if there's no more sections above
             if (!prev.length && options.loopTop) {
-                prev = $('.pp-section').last();
+                prev = $pages.last();
             }
 
             if (prev.length) {
@@ -109,11 +112,11 @@
         * Moves sectio down
         */
         $.fn.pagepiling.moveSectionDown = function () {
-            var next = $('.pp-section.active').next('.pp-section');
+            var next = $pages.filter('.' + options.activeClass).next('.pp-section');
 
             //looping to the top if there's no more sections below
             if(!next.length && options.loopBottom){
-                next = $('.pp-section').first();
+                next = $pages.first();
             }
 
             if (next.length) {
@@ -128,13 +131,18 @@
             var destiny = '';
 
             if(isNaN(section)){
-                destiny = $('[data-anchor="'+section+'"]');
+                for (var attr in ['data-anchor', 'id', 'name']) {
+                    destiny = $('['+attr+'="'+section+'"]');
+                    if (destiny.length) {
+                        break;
+                    }
+                }
             }else{
-                destiny = $('.pp-section').eq( (section -1) );
+                destiny = $pages.eq( (section -1) );
             }
 
 
-            if(destiny.length > 0){
+            if(destiny.length){
                 scrollPage(destiny);
             }
         };
@@ -163,27 +171,28 @@
             addVerticalNavigation();
         }
 
-         var zIndex = $('.pp-section').length;
+         var zIndex = $pages.length;
 
-        $('.pp-section').each(function (index) {
-            $(this).data('data-index', index);
-            $(this).css('z-index', zIndex);
+        $pages.each(function (index) {
+            var $this = $(this)
+                .data('data-index', index)
+                .css('z-index', zIndex);
 
             //if no active section is defined, the 1st one will be the default one
-            if (!index && $('.pp-section.active').length === 0) {
-                $(this).addClass('active');
+            if (!index && $pages.filter('.' + options.activeClass).length === 0) {
+                $this.addClass(options.activeClass);
             }
 
             if (typeof options.anchors[index] !== 'undefined') {
-                $(this).attr('data-anchor', options.anchors[index]);
+                $this.attr('data-anchor', options.anchors[index]);
             }
 
             if (typeof options.sectionsColor[index] !== 'undefined') {
-                $(this).css('background-color', options.sectionsColor[index]);
+                $this.css('background-color', options.sectionsColor[index]);
             }
 
             if(options.verticalCentered){
-                addTableClass($(this));
+                addTableClass($this);
             }
 
             zIndex = zIndex - 1;
@@ -191,7 +200,7 @@
             //vertical centered of the navigation + first bullet active
             if(options.navigation){
                 $('#pp-nav').css('margin-top', '-' + ($('#pp-nav').height()/2) + 'px');
-                $('#pp-nav').find('li').eq($('.pp-section.active').index('.pp-section')).find('a').addClass('active');
+                $('#pp-nav').find('li').eq($pages.filter('.'+options.activeClass).index('.pp-section')).find('a').addClass(options.activeClass);
             }
 
             $(window).on('load', function() {
@@ -215,7 +224,7 @@
         function getYmovement(){
              var sectionIndex = destination.index('.pp-section');
 
-             if( $('.pp-section.active').index('.pp-section') < sectionIndex ){
+             if( $pages.filter('.'+options.activeClass).index('.pp-section') < sectionIndex ){
                 return 'down';
              }
              return 'up';
@@ -225,7 +234,7 @@
         * Scrolls the page to the given destination
         */
         function scrollPage(destination, animated) {
-            var activeSection = $('.pp-section.active');
+            var activeSection = $pages.filter('.'+options.activeClass);
             var anchorLink  = destination.data('anchor');
             var sectionIndex = destination.index('.pp-section');
             var toMove = destination;
@@ -247,7 +256,7 @@
                 var translate3d = 'translate3d(0px, -100%, 0px)';
                 var scrolling = '-100%';
 
-                var sectionsToMove = $('.pp-section').map(function(index){
+                var sectionsToMove = $pages.map(function(index){
                     if (index < destination.index('.pp-section')){
                         return $(this);
                     }
@@ -271,7 +280,7 @@
                 var translate3d = 'translate3d(0px, 0px, 0px)';
                 var scrolling = '0';
 
-                var sectionsToMove = $('.pp-section').map(function(index){
+                var sectionsToMove = $pages.map(function(index){
                     if (index > destination.index('.pp-section')){
                         return $(this);
                     }
@@ -357,7 +366,13 @@
             //getting the anchor link in the URL and deleting the `#`
             var value =  window.location.hash.replace('#', '');
             var sectionAnchor = value;
-            var section = $('.pp-section[data-anchor="'+sectionAnchor+'"]');
+            var section = $pages.filter(function () {
+                for (var attr in ['data-anchor', 'id', 'name']) {
+                    if ($(this).is('['+attr+'="'+sectionAnchor+'"]')) {
+                        return true;
+                    }
+                }
+            });
 
             if(section.length > 0){  //if theres any #
                 scrollPage(section, options.animateAnchor);
@@ -396,10 +411,16 @@
                 It is called twice for each scroll otherwise, as in case of using anchorlinks `hashChange`
                 event is fired on every scroll too.*/
                 if (sectionAnchor && sectionAnchor !== lastScrolledDestiny)  {
+                    var section;
                     if(isNaN(sectionAnchor)){
-                        var section = $('[data-anchor="'+sectionAnchor+'"]');
+                        for (var attr in ['data-anchor', 'id', 'name']) {
+                            section = $('['+attr+'="'+section+'"]');
+                            if (section.length) {
+                                break;
+                            }
+                        }
                     }else{
-                        var section = $('.pp-section').eq( (sectionAnchor -1) );
+                        section = $pages.eq( (sectionAnchor -1) );
                     }
 
                     scrollPage(section);
@@ -431,7 +452,7 @@
         /**
          * Sliding with arrow keys, both, vertical and horizontal
          */
-        $(document).keydown(function (e) {
+        $doc.keydown(function (e) {
             if(options.keyboardScrolling && !isMoving()){
                 //Moving the main page with the keyboard arrows if keyboard scrolling is enabled
                 switch (e.which) {
@@ -454,7 +475,7 @@
 
                         //End
                     case 35:
-                        $.fn.pagepiling.moveTo($('.pp-section').length);
+                        $.fn.pagepiling.moveTo($pages.length);
                         break;
 
                         //left
@@ -474,11 +495,11 @@
         });
 
         if(options.normalScrollElements){
-            $(document).on('mouseenter', options.normalScrollElements, function () {
+            $doc.on('mouseenter', options.normalScrollElements, function () {
                 $.fn.pagepiling.setMouseWheelScrolling(false);
             });
 
-            $(document).on('mouseleave', options.normalScrollElements, function(){
+            $doc.on('mouseleave', options.normalScrollElements, function(){
                 $.fn.pagepiling.setMouseWheelScrolling(true);
             });
         }
@@ -496,7 +517,7 @@
                 var delta = Math.max(-1, Math.min(1,
                         (e.wheelDelta || -e.deltaY || -e.detail)));
 
-                var activeSection = $('.pp-section.active');
+                var activeSection = $pages.filter('.'+options.activeClass);
                 var scrollable = isScrollable(activeSection);
 
                 //scrolling down?
@@ -553,7 +574,7 @@
         * from the current section.
         */
         function getYmovement(destiny){
-            var fromIndex = $('.pp-section.active').index('.pp-section');
+            var fromIndex = $pages.$pages.filter('.'+options.activeClass).activeClass).index('.pp-section');
             var toIndex = destiny.index('.pp-section');
 
             if(fromIndex > toIndex){
@@ -670,7 +691,7 @@
             if (!checkParentForNormalScrollElement(event.target)) {
                 event.preventDefault();
 
-                var activeSection = $('.pp-section.active');
+                var activeSection = $pages.$pages.filter('.'+options.activeClass).activeClass);
                 var scrollable = isScrollable(activeSection);
 
                 if (!isMoving()) {
@@ -726,7 +747,7 @@
 
             nav.addClass(options.navigation.position);
 
-            for(var cont = 0; cont < $('.pp-section').length; cont++){
+            for(var cont = 0; cont < $pages.length; cont++){
                 var link = '';
                 if(options.anchors.length){
                     link = options.anchors[cont];
@@ -747,16 +768,16 @@
         /**
         * Scrolls to the section when clicking the navigation bullet
         */
-        $(document).on('click touchstart', '#pp-nav a', function(e){
+        $doc.on('click touchstart', '#pp-nav a', function(e){
             e.preventDefault();
             var index = $(this).parent().index();
-            scrollPage($('.pp-section').eq(index));
+            scrollPage($pages.eq(index));
         });
 
         /**
         * Navigation tooltips
         */
-        $(document).on({
+        $doc.on({
             mouseenter: function(){
                 var tooltip = $(this).data('tooltip');
                 $('<div class="pp-tooltip ' + options.navigation.position +'">' + tooltip + '</div>').hide().appendTo($(this)).fadeIn(200);
@@ -773,11 +794,11 @@
          */
         function activateNavDots(name, sectionIndex){
             if(options.navigation){
-                $('#pp-nav').find('.active').removeClass('active');
+                $('#pp-nav').find('.'+options.activeClass).removeClass(options.activeClass);
                 if(name){
-                    $('#pp-nav').find('a[href="#' + name + '"]').addClass('active');
+                    $('#pp-nav').find('a[href="#' + name + '"]').addClass(options.activeClass);
                 }else{
-                    $('#pp-nav').find('li').eq(sectionIndex).find('a').addClass('active');
+                    $('#pp-nav').find('li').eq(sectionIndex).find('a').addClass(options.activeClass);
                 }
             }
         }
@@ -787,8 +808,9 @@
          */
         function activateMenuElement(name){
             if(options.menu){
-                $(options.menu).find('.active').removeClass('active');
-                $(options.menu).find('[data-menuanchor="'+name+'"]').addClass('active');
+                var $menu = $(options.menu);
+                $menu.find('.'+options.activeClass).removeClass(options.activeClass);
+                $menu.find('[data-menuanchor="'+name+'"]').addClass(options.activeClass);
             }
         }
 
